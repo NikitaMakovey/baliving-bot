@@ -40,6 +40,10 @@ export default class CallbackHandler {
                 await this.handleAskArea(user)
             } else if (data.includes(Actions.SelectAllAreas)) {
                 await this.handleSelectAllAreas(messageId, user, keyboard)
+            } else if (data.includes(Actions.HaveAlreadyFound)) {
+                await this.handleHaveAlreadyFound(user)
+            } else if (data.includes(Actions.ResumeSearch)) {
+                await this.handleResumeSearch(user)
             } else if (user.nextAction === Actions.ReadCity) {
                 if (data === Actions.Finish) {
                     await this.handleFinishCityMessage(
@@ -132,11 +136,14 @@ export default class CallbackHandler {
                 }
             } else if (user.nextAction === Actions.Confirm) {
                 console.log(data)
-                if (data.includes(Actions.StartSearch)) {
+                if (
+                    data.includes(Actions.StartSearch) ||
+                    data.include(Actions.ResumeSearch)
+                ) {
                     await this.handleSearchMessage(
-                        messageId,
                         user,
-                        data.includes(Actions.StartSearchNext)
+                        data.includes(Actions.StartSearchNext),
+                        data.includes(Actions.StartSearchNew)
                     )
                 }
             } else if (
@@ -410,7 +417,7 @@ export default class CallbackHandler {
         }
     }
 
-    async handleSearchMessage(messageId, user, isNext) {
+    async handleSearchMessage(user, isNext, isNew) {
         await this.botSenderService.deleteMessageForUser(user)
         await this.usersService.update(user.userId, user.chatId, {
             currentAction: Actions.WaitingForReply,
@@ -422,7 +429,7 @@ export default class CallbackHandler {
         )
         const request: any = await this.requestsService.find(+user.requestId)
         const properties: any = (() => {
-            if (!isNext) {
+            if (!isNext && !isNew) {
                 return []
             }
             return request.properties ?? []
@@ -435,7 +442,13 @@ export default class CallbackHandler {
             request.beds,
             request.minPrice,
             request.price,
-            properties
+            properties,
+            isNew ? 10 : 3,
+            isNew
+                ? request.properties.reduce((a: number, b: number) =>
+                      Math.max(a, b)
+                  )
+                : undefined
         )
         await this.botSenderService.deleteMessage(
             user.userId,
@@ -445,35 +458,46 @@ export default class CallbackHandler {
         if (databaseProperties.length) {
             let isSent: boolean = false
             for (const property of databaseProperties) {
-                if (isValidUrl(property.get('Телеграм ссылка'))) {
-                    const id: any = await this.botSenderService.sendProperty(
-                        property,
-                        user
-                    )
-                    if (id) {
-                        properties.push(id)
-                        isSent = true
+                try {
+                    if (isValidUrl(property.get('Телеграм ссылка'))) {
+                        const id: any =
+                            await this.botSenderService.sendProperty(
+                                property,
+                                user
+                            )
+                        if (id) {
+                            properties.push(id)
+                            isSent = true
+                        }
                     }
+                } catch (ex) {
+                    console.log(`Failed to send propetry: ${ex}`)
                 }
             }
             await this.requestsService.update(request.id, { properties })
             if (isSent) {
+                const button = isNew
+                    ? {
+                          text: locales[user.locale].showTheFollowingGeneralAds,
+                          callback_data: Actions.StartSearchNext,
+                      }
+                    : {
+                          text: locales[user.locale].showTheFollowingAds,
+                          callback_data: Actions.StartSearchNext,
+                      }
                 await this.botSenderService.sendMessage(
                     user.chatId,
                     locales[user.locale].maybeYouCanFindSomethingElse,
                     {
                         reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    {
-                                        text: locales[user.locale]
-                                            .showTheFollowingAds,
-                                        callback_data: Actions.StartSearchNext,
-                                    },
-                                ],
-                            ],
+                            inline_keyboard: [[button]],
                         },
                     }
+                )
+            } else {
+                await this.botSenderService.sendMessage(
+                    user.chatId,
+                    locales[user.locale].notFoundOptions
                 )
             }
         } else {
@@ -859,5 +883,34 @@ export default class CallbackHandler {
         const request: any = await this.requestsService.find(+user.requestId)
         await this.botSenderService.deleteMessageForUser(user)
         await this.botSenderService.sendAreaKeyboard(user, request)
+    }
+
+    async handleHaveAlreadyFound(user) {
+        await this.usersService.update(user.userId, user.chatId, {
+            enabledNotifications: false,
+        })
+        await this.botSenderService.sendMessage(
+            user.chatId,
+            locales[user.locale].haveAlreadyFoundReply,
+            {
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            {
+                                text: locales[user.locale].resumeSearchButton,
+                                callback_data: Actions.ResumeSearch,
+                            },
+                        ],
+                    ],
+                },
+            }
+        )
+    }
+
+    async handleResumeSearch(user) {
+        await this.usersService.update(user.userId, user.chatId, {
+            enabledNotifications: true,
+        })
+        await this.handleSearchMessage(user, false, false)
     }
 }

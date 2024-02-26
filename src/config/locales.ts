@@ -47,10 +47,16 @@ export default {
         notFoundOptions:
             'К сожалению, сейчас я ничего не нашел по вашему запросу.\n\nЯ буду присылать вам новые предложения, как только они появятся!\n\nТакже вы можете изменить параметры подбора, нажав Меню.',
         foundOptions:
-            'Сейчас я нашел для вас такие варианты. Я буду присылать вам новые предложения по вашим параметрам, как только они появятся!\n\nТакже вы можешь редактировать запрос, нажав Меню.',
+            'Я нашел для вас новые варианты! Я буду присылать вам уведомления о новых предложения по вашим параметрам, как только они появятся!\n\nТакже вы можешь редактировать запрос, нажав Меню.',
         maybeYouCanFindSomethingElse:
             'Возможно, Ты можешь найти что-нибудь еще',
         showTheFollowingAds: 'Показать следующие объявления',
+        showTheFollowingGeneralAds: 'Показать следующие из общего поиска',
+        showNewAds: 'Показать новые объявления',
+        haveAlreadyFound: 'Уже нашел',
+        haveAlreadyFoundReply:
+            'Я больше не буду присылать вам уведомления о новых объявлениях',
+        resumeSearchButton: 'Возобновить поиск',
         finalMessage:
             'Локация: ${city}\nРайон: ${areas}\nКатегория: ${categories}\nКоличество спален: ${beds}\nЦена: ${price}$/месяц\n\n${link}',
         link: 'Ссылка',
@@ -102,9 +108,15 @@ export default {
         notFoundOptions:
             "Sorry, I didn't find anything matching your search right now.\n\nI'll send you new suggestions as soon as they become available!\n\nYou can also change your search options by pressing Menu.",
         foundOptions:
-            "Now I found these options for you. I'll send you new suggestions for your options as soon as they become available!\n\nYou can also edit the request by pressing Menu.",
+            "Now I found new options for you. I'll send you new suggestions for your options as soon as they become available!\n\nYou can also edit the request by pressing Menu.",
         maybeYouCanFindSomethingElse: 'Maybe you can find something else',
         showTheFollowingAds: 'Show the following ads',
+        showTheFollowingGeneralAds: 'Show the new ads from general list',
+        showNewAds: 'Show new ads',
+        haveAlreadyFound: 'Have already found',
+        haveAlreadyFoundReply:
+            'I will no longer send you notifications about new ads',
+        resumeSearchButton: 'Resume search',
         finalMessage:
             'Location: ${areas}\nNumber of bedrooms: ${beds}\nPrice: ${price}$/month\n\n${link}',
         link: 'Link',

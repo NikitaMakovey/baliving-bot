@@ -55,4 +55,7 @@ export class User {
 
     @Column({ name: 'warningTime', default: null })
     warningTime: Date
+
+    @Column({ name: 'enabled_notifications', default: true })
+    enabledNotifications: boolean
 }

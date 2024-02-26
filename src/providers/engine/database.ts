@@ -55,7 +55,8 @@ export default class Database {
         beds,
         minPrice,
         price,
-        properties = []
+        properties = [],
+        lastPropetry?
     ) {
         // The api has a limitation on working with arrays. There are no functions
         // for arrays as contain or in. Therefore, the search for the number is
@@ -63,7 +64,9 @@ export default class Database {
         const propertiesFormula = `NOT(SEARCH(CONCATENATE(",", {Номер} ,","), ',${properties},'))`
         const areas_ = this.addAreasThatIncludeOther(city, areas)
         const areaFieldName = city == 'Бали' ? 'Район' : `Район ${city}`
-        console.log(areas_)
+        const lastPropetryCondition = lastPropetry
+            ? `,{Номер} > ${lastPropetry}`
+            : ''
         return `
         AND(
             ${properties.length ? propertiesFormula : 'TRUE()'},
@@ -74,6 +77,7 @@ export default class Database {
             {Цена долларов в месяц} >= ${minPrice},
             {Цена долларов в месяц} <= ${price},
             {Город} = '${city}'
+            ${lastPropetryCondition}
         )
         `
     }
@@ -86,20 +90,10 @@ export default class Database {
         minPrice,
         price,
         properties = [],
-        limit = 3
+        limit = 3,
+        lastPropetry?
     ) {
         const airtable = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY })
-        console.log(
-            this.generateFilterForProperties(
-                city,
-                areas,
-                categories,
-                beds,
-                minPrice,
-                price,
-                properties
-            )
-        )
         try {
             return await airtable
                 .base(process.env.AIRTABLE_BASE_ID)
@@ -112,9 +106,11 @@ export default class Database {
                         beds,
                         minPrice,
                         price,
-                        properties
+                        properties,
+                        lastPropetry
                     ),
                     maxRecords: limit,
+                    sort: [{ field: 'Дата создания', direction: 'desc' }],
                 })
                 .all()
         } catch (exception) {

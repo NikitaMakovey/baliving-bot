@@ -6,6 +6,7 @@ import Database from './engine/database'
 import locales from '../config/locales'
 import { BotSenderService } from './bot-sender.service'
 import { isValidUrl } from './engine/utils'
+import { Actions } from './engine/actions'
 
 const TelegramBot = require('node-telegram-bot-api')
 require('dotenv').config()
@@ -31,12 +32,13 @@ export class TasksService {
     //     })
     // }
 
-    @Cron('0 0 * * * *')
+    @Cron(CronExpression.EVERY_HOUR)
     handleCron() {
         console.debug('Checking new properties ...')
         const bot = new TelegramBot(process.env.TOKEN)
         this.usersService.find().then((users) => {
             users.forEach((user) => {
+                if (!user.enabledNotifications) return
                 if (user.requestId) {
                     Database.findUser(user.email).then((databaseUser) => {
                         if (
@@ -74,35 +76,42 @@ export class TasksService {
                     request.beds,
                     request.minPrice,
                     request.price,
+                    properties,
+                    10,
                     properties
+                        .map((property: string) => Number(property))
+                        .reduce((a: number, b: number) => Math.max(a, b))
                 ).then(async (newProperties) => {
-                    let isSent: boolean = false
-                    console.debug(
-                        `new properties (${newProperties.length}) ...`
+                    newProperties = newProperties.filter((property) =>
+                        isValidUrl(property.get('Телеграм ссылка'))
                     )
-                    for (const property of newProperties) {
-                        if (isValidUrl(property.get('Телеграм ссылка'))) {
-                            const id: any =
-                                await this.botSenderService.sendProperty(
-                                    property,
-                                    user
-                                )
-                            if (id) {
-                                properties.push(id)
-                                isSent = true
-                            }
+                    console.log(newProperties.length)
+                    if (newProperties.length == 0) return
+
+                    await this.botSenderService.sendMessage(
+                        user.chatId,
+                        locales[user.locale].foundOptions,
+                        {
+                            reply_markup: {
+                                inline_keyboard: [
+                                    [
+                                        {
+                                            text: locales[user.locale]
+                                                .showNewAds,
+                                            callback_data:
+                                                Actions.StartSearchNew,
+                                        },
+                                        {
+                                            text: locales[user.locale]
+                                                .haveAlreadyFound,
+                                            callback_data:
+                                                Actions.HaveAlreadyFound,
+                                        },
+                                    ],
+                                ],
+                            },
                         }
-                    }
-                    if (isSent) {
-                        this.requestsService
-                            .update(request.id, { properties })
-                            .then(() => {
-                                bot.sendMessage(
-                                    user.chatId,
-                                    locales[user.locale].foundOptions
-                                )
-                            })
-                    }
+                    )
                 })
             }
         })

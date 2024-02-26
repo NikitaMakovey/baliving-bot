@@ -137,7 +137,10 @@ export class BotSenderService {
                             {
                                 text: locales[user.locale].write,
                                 switch_inline_query: locales[user.locale].write,
-                                url: property.get('Телеграм ссылка'),
+                                url: `https://${property
+                                    .get('Телеграм ссылка')
+                                    .split('//')
+                                    .at(-1)}`,
                             },
                         ],
                     ],
