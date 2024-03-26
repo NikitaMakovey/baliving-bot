@@ -353,68 +353,7 @@ export default class CallbackHandler {
     }
 
     async isValidUser(user) {
-        const message = await this.botSenderService.sendMessage(
-            user.chatId,
-            locales[user.locale].checking
-        )
-        const databaseUser: any = await Database.findUser(user.email)
-        console.debug(user.userId, user.chatId, message.message_id)
-        await this.botSenderService.deleteMessage(
-            user.chatId,
-            message.message_id
-        )
-        const options: any = {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: locales[user.locale].goToWebsite,
-                            switch_inline_query:
-                                locales[user.locale].goToWebsite,
-                            url: 'https://baliving.ru/tariffs',
-                        },
-                    ],
-                    [
-                        {
-                            text: `${locales[user.locale].writeAnotherEmail}`,
-                            callback_data: `start`,
-                        },
-                    ],
-                ],
-            },
-        }
-        if (!databaseUser) {
-            await this.usersService.update(user.userId, user.chatId, {
-                currentAction: Actions.WaitingForReply,
-                nextAction: null,
-            })
-            await this.botSenderService.sendMessage(
-                user.chatId,
-                locales[user.locale].notFound,
-                options
-            )
-            return false
-        } else if (
-            (Database.isUserAccessValid(databaseUser) &&
-                Database.isVIPUser(databaseUser)) ||
-            Database.isTrialUser(databaseUser)
-        ) {
-            await this.usersService.update(user.userId, user.chatId, {
-                isTrial: Database.isTrialUser(databaseUser),
-            })
-            return true
-        } else {
-            await this.usersService.update(user.userId, user.chatId, {
-                currentAction: Actions.WaitingForReply,
-                nextAction: null,
-            })
-            await this.botSenderService.sendMessage(
-                user.chatId,
-                locales[user.locale].expired,
-                options
-            )
-            return false
-        }
+        return true
     }
 
     async handleSearchMessage(user, isNext, isNew) {

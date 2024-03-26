@@ -308,96 +308,15 @@ export default class MessageHandler {
                 locales[user.locale].notFound,
                 options
             )
-        } else if (
-            Database.isUserAccessValid(databaseUser) ||
-            Database.isTrialUser(databaseUser)
-        ) {
-            if (
-                Database.isVIPUser(databaseUser) ||
-                Database.isTrialUser(databaseUser)
-            ) {
-                await this.usersService.update(user.userId, user.chatId, {
-                    currentAction: Actions.WaitingForReply,
-                    nextAction: Actions.ReadCity,
-                    isTrial: Database.isTrialUser(databaseUser),
-                })
-                const request: any = await this.requestsService.find(
-                    +user.requestId
-                )
-                await this.botSenderService.sendCityKeyboard(user, request)
-            } else {
-                await this.usersService.update(user.userId, user.chatId, {
-                    currentAction: Actions.WaitingForReply,
-                    nextAction: null,
-                })
-                const options: any = {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                {
-                                    text: locales[user.locale].goToWebsite,
-                                    switch_inline_query:
-                                        locales[user.locale].goToWebsite,
-                                    url: 'https://baliving.ru/tariffs',
-                                },
-                            ],
-                            [
-                                {
-                                    text: locales[user.locale].writeToSupport,
-                                    switch_inline_query:
-                                        locales[user.locale].writeToSupport,
-                                    url: 'https://t.me/info_baliving',
-                                },
-                            ],
-                            [
-                                {
-                                    text: `${
-                                        locales[user.locale].writeAnotherEmail
-                                    }`,
-                                    callback_data: `start`,
-                                },
-                            ],
-                        ],
-                    },
-                }
-                await this.botSenderService.sendMessage(
-                    message.chat.id,
-                    locales[user.locale].expired,
-                    options
-                )
-            }
         } else {
             await this.usersService.update(user.userId, user.chatId, {
                 currentAction: Actions.WaitingForReply,
-                nextAction: null,
+                nextAction: Actions.ReadCity,
             })
-            const options: any = {
-                reply_markup: {
-                    inline_keyboard: [
-                        [
-                            {
-                                text: locales[user.locale].goToWebsite,
-                                switch_inline_query:
-                                    locales[user.locale].goToWebsite,
-                                url: 'https://baliving.ru/tariffs',
-                            },
-                        ],
-                        [
-                            {
-                                text: `${
-                                    locales[user.locale].writeAnotherEmail
-                                }`,
-                                callback_data: `start`,
-                            },
-                        ],
-                    ],
-                },
-            }
-            await this.botSenderService.sendMessage(
-                message.chat.id,
-                locales[user.locale].expired,
-                options
+            const request: any = await this.requestsService.find(
+                +user.requestId
             )
+            await this.botSenderService.sendCityKeyboard(user, request)
         }
     }
 }

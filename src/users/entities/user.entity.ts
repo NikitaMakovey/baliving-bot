@@ -32,9 +32,6 @@ export class User {
     @Column({ name: 'next_action', default: null })
     nextAction: string
 
-    @Column({ name: 'is_trial', default: false })
-    isTrial: boolean
-
     @Column({ name: 'locale', default: 'ru' })
     locale: string
 

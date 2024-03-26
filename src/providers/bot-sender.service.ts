@@ -129,9 +129,7 @@ export class BotSenderService {
         try {
             let options: any = {
                 parse_mode: 'html',
-            }
-            if (!user.isTrial) {
-                options.reply_markup = {
+                reply_markup: {
                     inline_keyboard: [
                         [
                             {
@@ -144,7 +142,7 @@ export class BotSenderService {
                             },
                         ],
                     ],
-                }
+                },
             }
             const template = Templater.applyProperty(property, user.locale)
             await this.handlePhotos(property, user)
