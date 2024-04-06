@@ -2,6 +2,7 @@ import { UsersService } from '../../users/users.service'
 import locales from '../../config/locales'
 import { User } from '../../users/entities/user.entity'
 import Database from './database'
+import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common'
 import areas from '../../config/areas'
 import beds from '../../config/beds'
 import { RequestsService } from '../../requests/requests.service'
@@ -11,12 +12,20 @@ import { BotSenderService } from '../bot-sender.service'
 import { isValidUrl } from './utils'
 import city from 'src/config/city'
 import categories from 'src/config/categories'
+import { InjectQueue } from '@nestjs/bull'
+import { Queue } from 'bull'
+import { Cache } from 'cache-manager'
+import { redisKeys } from 'src/config/redisKeys'
+import { convertToMoscosTZ } from './utils'
 
-export default class CallbackHandler {
+@Injectable()
+export class CallbackHandler {
     constructor(
         private usersService: UsersService,
         private requestsService: RequestsService,
-        private botSenderService: BotSenderService
+        private botSenderService: BotSenderService,
+        @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+        @InjectQueue('post') private postQueue: Queue<any>
     ) {}
 
     async handle(chatId, userId, messageId, data, keyboard) {
@@ -24,7 +33,24 @@ export default class CallbackHandler {
         console.debug(user)
         console.debug(data)
         try {
-            if (['choose-locale:ru', 'choose-locale:en'].includes(data)) {
+            if (data.includes(Actions.RemoveJob) && user?.isAdmin) {
+                await this.handleRemoveJob(
+                    chatId,
+                    userId,
+                    messageId,
+                    data,
+                    user
+                )
+            } else if (
+                data.includes(Actions.ReadPostConfirm) &&
+                user?.isAdmin
+            ) {
+                await this.handlePostConfirm(chatId, userId, messageId, user)
+            } else if (data.includes(Actions.ReadPostCancel) && user?.isAdmin) {
+                await this.handlePostCancel(chatId, userId, messageId, user)
+            } else if (
+                ['choose-locale:ru', 'choose-locale:en'].includes(data)
+            ) {
                 await this.handleLocaleMessage(
                     chatId,
                     userId,
@@ -220,6 +246,58 @@ export default class CallbackHandler {
         }
     }
 
+    async handleRemoveJob(chatId, userId, messageId, data, user) {
+        const jobId = parseInt(data.split(':').at(1))
+        const job = await this.postQueue.getJob(jobId)
+        await job?.remove()
+        await this.botSenderService.sendMessage(
+            chatId,
+            locales[user.locale].iCanceled
+        )
+    }
+
+    async handlePostConfirm(chatId, userId, messageId, user) {
+        const key = redisKeys.POST(userId)
+        const { time, ...restPostObject } = await this.cacheManager.store.get(
+            key
+        )
+        const targetDate = new Date(time)
+        const currentDate = convertToMoscosTZ(new Date())
+        const delay = Number(targetDate) - Number(currentDate)
+        console.log(`Post delay: ${delay}`)
+        const job = await this.postQueue.add('post', restPostObject, {
+            delay,
+        })
+        const options: any = {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: locales[user.locale].cancel,
+                            callback_data: `${Actions.RemoveJob}:${job.id}`,
+                        },
+                    ],
+                ],
+            },
+        }
+        await this.botSenderService.sendMessage(
+            chatId,
+            locales[user.locale].iWillSend,
+            options
+        )
+        await this.botSenderService.deleteMessage(chatId, messageId)
+    }
+
+    async handlePostCancel(chatId, userId, messageId, user) {
+        const key = redisKeys.POST(userId)
+        await this.cacheManager.store.del(key)
+        await this.botSenderService.sendMessage(
+            chatId,
+            locales[user.locale].iCanceled
+        )
+        await this.botSenderService.deleteMessage(chatId, messageId)
+    }
+
     async handleLocaleMessage(chatId, userId, messageId, data, user) {
         const locale: string = data === 'choose-locale:ru' ? 'ru' : 'en'
         await this.botSenderService.deleteMessageForUser(user)
@@ -353,68 +431,7 @@ export default class CallbackHandler {
     }
 
     async isValidUser(user) {
-        const message = await this.botSenderService.sendMessage(
-            user.chatId,
-            locales[user.locale].checking
-        )
-        const databaseUser: any = await Database.findUser(user.email)
-        console.debug(user.userId, user.chatId, message.message_id)
-        await this.botSenderService.deleteMessage(
-            user.chatId,
-            message.message_id
-        )
-        const options: any = {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: locales[user.locale].goToWebsite,
-                            switch_inline_query:
-                                locales[user.locale].goToWebsite,
-                            url: 'https://baliving.ru/tariffs',
-                        },
-                    ],
-                    [
-                        {
-                            text: `${locales[user.locale].writeAnotherEmail}`,
-                            callback_data: `start`,
-                        },
-                    ],
-                ],
-            },
-        }
-        if (!databaseUser) {
-            await this.usersService.update(user.userId, user.chatId, {
-                currentAction: Actions.WaitingForReply,
-                nextAction: null,
-            })
-            await this.botSenderService.sendMessage(
-                user.chatId,
-                locales[user.locale].notFound,
-                options
-            )
-            return false
-        } else if (
-            (Database.isUserAccessValid(databaseUser) &&
-                Database.isVIPUser(databaseUser)) ||
-            Database.isTrialUser(databaseUser)
-        ) {
-            await this.usersService.update(user.userId, user.chatId, {
-                isTrial: Database.isTrialUser(databaseUser),
-            })
-            return true
-        } else {
-            await this.usersService.update(user.userId, user.chatId, {
-                currentAction: Actions.WaitingForReply,
-                nextAction: null,
-            })
-            await this.botSenderService.sendMessage(
-                user.chatId,
-                locales[user.locale].expired,
-                options
-            )
-            return false
-        }
+        return true
     }
 
     async handleSearchMessage(user, isNext, isNew) {
@@ -913,4 +930,7 @@ export default class CallbackHandler {
         })
         await this.handleSearchMessage(user, false, false)
     }
+}
+function injectable() {
+    throw new Error('Function not implemented.')
 }

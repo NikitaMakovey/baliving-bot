@@ -78,20 +78,8 @@ export class TasksService implements OnModuleInit {
         if (!user.enabledNotifications) return
         if (user.requestId) {
             const databaseUser = await Database.findUser(user.email)
-            if (
-                databaseUser &&
-                (Database.isUserAccessValid(databaseUser) ||
-                    Database.isTrialUser(databaseUser))
-            ) {
-                if (Database.isTrialUser(databaseUser)) {
-                    await this.handleActiveUser(bot, user)
-                } else if (Database.isVIPUser(databaseUser)) {
-                    await this.handleActiveUser(bot, user)
-                } else {
-                    await this.handleUndefinedActiveUser(bot, user)
-                }
-            } else {
-                await this.handleExpiredUser(bot, user)
+            if (databaseUser) {
+                await this.handleActiveUser(bot, user)
             }
         }
     }
@@ -142,73 +130,5 @@ export class TasksService implements OnModuleInit {
                 }
             )
         }
-    }
-
-    async handleUndefinedActiveUser(bot, user) {
-        const options: any = {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: locales[user.locale].goToWebsite,
-                            switch_inline_query:
-                                locales[user.locale].goToWebsite,
-                            url: 'https://baliving.ru/tariffs',
-                        },
-                    ],
-                    [
-                        {
-                            text: locales[user.locale].writeToSupport,
-                            switch_inline_query:
-                                locales[user.locale].writeToSupport,
-                            url: 'https://t.me/info_baliving',
-                        },
-                    ],
-                    [
-                        {
-                            text: `${locales[user.locale].writeAnotherEmail}`,
-                            callback_data: `start`,
-                        },
-                    ],
-                ],
-            },
-        }
-        await bot
-            .sendMessage(user.chatId, locales[user.locale].expired, options)
-            .then(async () => {
-                await this.usersService
-                    .delete(user.userId)
-                    .then((r) => console.debug(r))
-            })
-    }
-
-    async handleExpiredUser(bot, user) {
-        const options: any = {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: locales[user.locale].goToWebsite,
-                            switch_inline_query:
-                                locales[user.locale].goToWebsite,
-                            url: 'https://baliving.ru/tariffs',
-                        },
-                    ],
-                    [
-                        {
-                            text: `${locales[user.locale].writeAnotherEmail}`,
-                            callback_data: `start`,
-                        },
-                    ],
-                ],
-            },
-        }
-        await bot
-            .sendMessage(user.chatId, locales[user.locale].expired, options)
-            .then(async () => {
-                await this.usersService
-                    .delete(user.userId)
-                    .then((response) => console.debug(response))
-            })
     }
 }

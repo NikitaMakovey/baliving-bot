@@ -2,19 +2,23 @@ import { UsersService } from '../../users/users.service'
 import locales from '../../config/locales'
 import { User } from '../../users/entities/user.entity'
 import Database from './database'
-import areas from '../../config/areas'
 import { RequestsService } from '../../requests/requests.service'
 import { Templater } from './templater'
 import { Actions } from './actions'
 import { Commands } from './commands'
-import { SelectionKeyboard } from './selection-keyboard'
 import { BotSenderService } from '../bot-sender.service'
+import { Inject, Injectable } from '@nestjs/common'
+import { Cache } from 'cache-manager'
+import { CACHE_MANAGER } from '@nestjs/cache-manager'
+import { redisKeys } from 'src/config/redisKeys'
 
-export default class MessageHandler {
+@Injectable()
+export class MessageHandler {
     constructor(
         private usersService: UsersService,
         private requestsService: RequestsService,
-        private botSenderService: BotSenderService
+        private botSenderService: BotSenderService,
+        @Inject(CACHE_MANAGER) private readonly cacheManager: Cache
     ) {}
 
     async handle(message) {
@@ -24,7 +28,19 @@ export default class MessageHandler {
         console.debug(user)
         console.debug(message)
         try {
-            if (message.text.toString() === Commands.Start) {
+            if (message?.text?.toString() === Commands.Post && user?.isAdmin) {
+                await this.handlePostMessage(chatId, userId, user)
+            } else if (
+                user.currentAction == Actions.ReadPostTime &&
+                user?.isAdmin
+            ) {
+                await this.handlePostTimeMessage(message, chatId, userId, user)
+            } else if (
+                user.currentAction == Actions.ReadPostText &&
+                user?.isAdmin
+            ) {
+                await this.handlePostTextMessage(message, chatId, userId, user)
+            } else if (message.text.toString() === Commands.Start) {
                 await this.handleStartMessage(chatId, userId, user)
             } else if (
                 user.nextAction &&
@@ -49,6 +65,79 @@ export default class MessageHandler {
         } catch (exception) {
             console.error(exception)
         }
+    }
+
+    async handlePostMessage(chatId, userId, user) {
+        await this.botSenderService.sendMessage(
+            chatId,
+            locales[user.locale].sendTime
+        )
+
+        await this.usersService.update(userId, chatId, {
+            currentAction: Actions.ReadPostTime,
+            nextAction: null,
+        })
+    }
+
+    async handlePostTimeMessage(message, chatId, userId, user) {
+        await this.botSenderService.sendMessage(
+            chatId,
+            locales[user.locale].sendText
+        )
+
+        const key = redisKeys.POST(userId)
+        await this.cacheManager.store.set(key, {
+            time: message.text,
+        })
+
+        await this.usersService.update(userId, chatId, {
+            currentAction: Actions.ReadPostText,
+            nextAction: null,
+        })
+    }
+
+    async handlePostTextMessage(message, chatId, userId, user) {
+        await this.usersService.update(userId, chatId, {
+            currentAction: Actions.WaitingForReply,
+            nextAction: null,
+        })
+
+        const key = redisKeys.POST(userId)
+        const postObject = await this.cacheManager.store.get<Object>(key)
+        await this.cacheManager.store.set(key, {
+            ...postObject,
+            fromChatId: chatId,
+            messageId: message.message_id,
+        })
+
+        await this.botSenderService.copyMessage(
+            chatId,
+            chatId,
+            message.message_id
+        )
+
+        const options: any = {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: locales[user.locale].confirm,
+                            callback_data: Actions.ReadPostConfirm,
+                        },
+                        {
+                            text: locales[user.locale].cancel,
+                            callback_data: Actions.ReadPostCancel,
+                        },
+                    ],
+                ],
+            },
+        }
+
+        await this.botSenderService.sendMessage(
+            chatId,
+            locales[user.locale].iWillSend,
+            options
+        )
     }
 
     async handleStartMessage(chatId, userId, user) {
@@ -308,96 +397,15 @@ export default class MessageHandler {
                 locales[user.locale].notFound,
                 options
             )
-        } else if (
-            Database.isUserAccessValid(databaseUser) ||
-            Database.isTrialUser(databaseUser)
-        ) {
-            if (
-                Database.isVIPUser(databaseUser) ||
-                Database.isTrialUser(databaseUser)
-            ) {
-                await this.usersService.update(user.userId, user.chatId, {
-                    currentAction: Actions.WaitingForReply,
-                    nextAction: Actions.ReadCity,
-                    isTrial: Database.isTrialUser(databaseUser),
-                })
-                const request: any = await this.requestsService.find(
-                    +user.requestId
-                )
-                await this.botSenderService.sendCityKeyboard(user, request)
-            } else {
-                await this.usersService.update(user.userId, user.chatId, {
-                    currentAction: Actions.WaitingForReply,
-                    nextAction: null,
-                })
-                const options: any = {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                {
-                                    text: locales[user.locale].goToWebsite,
-                                    switch_inline_query:
-                                        locales[user.locale].goToWebsite,
-                                    url: 'https://baliving.ru/tariffs',
-                                },
-                            ],
-                            [
-                                {
-                                    text: locales[user.locale].writeToSupport,
-                                    switch_inline_query:
-                                        locales[user.locale].writeToSupport,
-                                    url: 'https://t.me/info_baliving',
-                                },
-                            ],
-                            [
-                                {
-                                    text: `${
-                                        locales[user.locale].writeAnotherEmail
-                                    }`,
-                                    callback_data: `start`,
-                                },
-                            ],
-                        ],
-                    },
-                }
-                await this.botSenderService.sendMessage(
-                    message.chat.id,
-                    locales[user.locale].expired,
-                    options
-                )
-            }
         } else {
             await this.usersService.update(user.userId, user.chatId, {
                 currentAction: Actions.WaitingForReply,
-                nextAction: null,
+                nextAction: Actions.ReadCity,
             })
-            const options: any = {
-                reply_markup: {
-                    inline_keyboard: [
-                        [
-                            {
-                                text: locales[user.locale].goToWebsite,
-                                switch_inline_query:
-                                    locales[user.locale].goToWebsite,
-                                url: 'https://baliving.ru/tariffs',
-                            },
-                        ],
-                        [
-                            {
-                                text: `${
-                                    locales[user.locale].writeAnotherEmail
-                                }`,
-                                callback_data: `start`,
-                            },
-                        ],
-                    ],
-                },
-            }
-            await this.botSenderService.sendMessage(
-                message.chat.id,
-                locales[user.locale].expired,
-                options
+            const request: any = await this.requestsService.find(
+                +user.requestId
             )
+            await this.botSenderService.sendCityKeyboard(user, request)
         }
     }
 }

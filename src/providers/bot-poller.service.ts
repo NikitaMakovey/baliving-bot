@@ -1,22 +1,20 @@
 import { Injectable, OnModuleInit } from '@nestjs/common'
-import Handler from './engine/handler'
-import { UsersService } from '../users/users.service'
-import { RequestsService } from '../requests/requests.service'
-import { BotSenderService } from './bot-sender.service'
+import { MessageHandler } from './engine/message-handler'
+import { CallbackHandler } from './engine/callback-handler'
 const TelegramBot = require('node-telegram-bot-api')
 require('dotenv').config()
 
 const BOT_CHAT_TYPE: string = 'private'
 
 @Injectable()
-export class BotPollerService extends Handler implements OnModuleInit {
+export class BotPollerService implements OnModuleInit {
+    readonly bot: any
+
     constructor(
-        usersService: UsersService,
-        requestsService: RequestsService,
-        botSenderService: BotSenderService
+        private callbackHandler: CallbackHandler,
+        private messageHandler: MessageHandler
     ) {
-        const bot = new TelegramBot(process.env.TOKEN, { polling: true })
-        super(usersService, requestsService, botSenderService, bot)
+        this.bot = new TelegramBot(process.env.TOKEN, { polling: true })
     }
 
     onModuleInit() {
@@ -25,10 +23,10 @@ export class BotPollerService extends Handler implements OnModuleInit {
     }
 
     botCallback() {
-        const _this = this
-        this.bot.on('callback_query', function onCallbackQuery(callbackQuery) {
+        this.bot.on('callback_query', (callbackQuery) => {
             try {
-                _this.handleCallback(
+                console.log('callback')
+                this.callbackHandler.handle(
                     callbackQuery.message.chat.id,
                     callbackQuery.from.id,
                     callbackQuery.message.message_id,
@@ -42,10 +40,10 @@ export class BotPollerService extends Handler implements OnModuleInit {
     }
 
     botMessage() {
-        const _this = this
         this.bot.on('message', (message) => {
+            console.log('message')
             if (message.chat.type === BOT_CHAT_TYPE) {
-                _this.handle(message)
+                this.messageHandler.handle(message)
             }
         })
     }

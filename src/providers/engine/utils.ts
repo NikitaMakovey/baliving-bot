@@ -7,3 +7,12 @@ export function isValidUrl(string) {
     }
     return url.protocol === 'http:' || url.protocol === 'https:'
 }
+
+export function convertToMoscosTZ(date: Date | string) {
+    return new Date(
+        (typeof date === 'string' ? new Date(date) : date).toLocaleString(
+            'en-US',
+            { timeZone: 'Europe/Moscow' }
+        )
+    )
+}

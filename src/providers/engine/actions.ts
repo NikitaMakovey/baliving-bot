@@ -47,5 +47,11 @@ export enum Actions {
     EditMinPrice = 'edit-min-price',
     EditPrice = 'edit-price',
 
+    ReadPostText = 'read-post-text',
+    ReadPostTime = 'read-post-time',
+    ReadPostConfirm = 'read-post-confirm',
+    ReadPostCancel = 'read-post-cancel',
+    RemoveJob = 'remove-job',
+
     SelectAllAreas = 'select-all-areas',
 }

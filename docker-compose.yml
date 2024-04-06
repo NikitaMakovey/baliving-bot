@@ -1,0 +1,23 @@
+version: '3.1'
+
+services:
+
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_DB: default
+      POSTGRES_USER: Administrator
+      POSTGRES_PASSWORD: secret
+
+  node:
+    build: ./
+    restart: always
+    env_file: .env
+
+  redis:
+    image: 'bitnami/redis:7.2.4'
+    env_file: .env
+    restart: always
+    volumes:
+      - redis_data_container:/bitnami/redis/data

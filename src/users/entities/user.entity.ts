@@ -35,6 +35,9 @@ export class User {
     @Column({ name: 'is_trial', default: false })
     isTrial: boolean
 
+    @Column({ name: 'is_admin', default: false })
+    isAdmin: boolean
+
     @Column({ name: 'locale', default: 'ru' })
     locale: string
 
